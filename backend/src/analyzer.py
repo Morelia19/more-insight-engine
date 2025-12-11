@@ -1,25 +1,32 @@
 import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig
+from transformers import AutoTokenizer, AutoModelForCausalLM
 
 class PedagogicalAnalyzer:
     def __init__(self):
-        model_id = "deepseek-ai/DeepSeek-V2-Lite-Chat"
-        print(f"🧠 Cargando DeepSeek V2 Lite ({model_id})...")
+        model_id = "microsoft/Phi-3-mini-4k-instruct"
+        print(f"🧠 Cargando Phi-3 Mini ({model_id})...")
+        print("✅ Modelo optimizado: ~7.6 GB, excelente para análisis pedagógico")
 
-        bnb_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_use_double_quant=True,
-            bnb_4bit_quant_type="nf4",
-            bnb_4bit_compute_dtype=torch.bfloat16
-        )
+        # Detectar el dispositivo disponible
+        if torch.backends.mps.is_available():
+            device = "mps"
+            print("✅ Usando aceleración MPS (Apple Silicon)")
+        elif torch.cuda.is_available():
+            device = "cuda"
+            print("✅ Usando aceleración CUDA")
+        else:
+            device = "cpu"
+            print("⚠️  Usando CPU (más lento)")
 
         self.tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
         self.model = AutoModelForCausalLM.from_pretrained(
             model_id,
-            quantization_config=bnb_config,
-            device_map="auto",
+            torch_dtype=torch.float16,  # Usar float16 para reducir uso de RAM
+            low_cpu_mem_usage=True,
             trust_remote_code=True
-        )
+        ).to(device)
+        
+        self.device = device
 
     def analyze_class(self, transcription):
         # PROMPT DE AUDITORÍA PEDAGÓGICA (Tu aporte intelectual)
@@ -35,13 +42,13 @@ class PedagogicalAnalyzer:
             {"role": "user", "content": f"Transcripción:\n{transcription}"}
         ]
 
-        inputs = self.tokenizer.apply_chat_template(messages, return_tensors="pt").to(self.model.device)
+        inputs = self.tokenizer.apply_chat_template(messages, return_tensors="pt").to(self.device)
         
         outputs = self.model.generate(
             inputs, 
-            max_new_tokens=1024,
+            max_new_tokens=512,  # Reducido: suficiente para JSON de reporte
             do_sample=True,
-            temperature=0.7 # Creatividad controlada
+            temperature=0.7 
         )
         
         response = self.tokenizer.decode(outputs[0][inputs.shape[1]:], skip_special_tokens=True)
