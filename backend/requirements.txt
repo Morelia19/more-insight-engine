@@ -1,7 +1,10 @@
 fastapi
 uvicorn[standard]
 python-multipart
-openai-whisper
+faster-whisper
 torch
 transformers
 accelerate
+Pillow
+python-dateutil
+ffmpeg-python

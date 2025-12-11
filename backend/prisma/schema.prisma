@@ -1,0 +1,38 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Video {
+  id         String    @id @default(uuid())
+  filename   String
+  duration   Float
+  storageUrl String
+  uploadedAt DateTime  @default(now())
+  sessions   Session[]
+
+  @@map("videos")
+}
+
+model Session {
+  id              String   @id @default(uuid())
+  videoId         String
+  video           Video    @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  studentName     String
+  teacherName     String
+  sessionPhotoUrl String?
+  transcriptText  String?  @db.Text
+  analysisJson    Json?
+  reportImageUrl  String?
+  status          String   @default("pending") // pending, processing, completed, error
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([videoId])
+  @@index([status])
+  @@map("sessions")
+}
