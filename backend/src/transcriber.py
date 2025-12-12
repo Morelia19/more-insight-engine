@@ -1,58 +1,91 @@
-from faster_whisper import WhisperModel
-import torch
+import os
+from groq import Groq
 
 class AudioTranscriber:
-    def __init__(self, model_size="tiny"):
-        """
-        Inicializa Faster-Whisper con aceleración MPS/GPU
-        model_size: tiny, base, small, medium, large-v2
-        """
-        print(f"Cargando Faster-Whisper ({model_size}) con aceleración...")
-        
-        # Detectar dispositivo (MPS para Apple Silicon, CUDA para NVIDIA, CPU como fallback)
-        if torch.backends.mps.is_available():
-            device = "auto"  # faster-whisper auto-detecta MPS en Apple Silicon
-            compute_type = "int8"  # Optimizado para Apple Silicon
-            print("✅ Usando aceleración Apple Silicon (MPS)")
-        elif torch.cuda.is_available():
-            device = "cuda"
-            compute_type = "float16"
-            print("✅ Usando aceleración NVIDIA (CUDA)")
-        else:
-            device = "cpu"
-            compute_type = "int8"
-            print("⚠️  Usando CPU (más lento)")
-        
-        # Cargar modelo optimizado
-        self.model = WhisperModel(
-            model_size,
-            device=device,
-            compute_type=compute_type,
-            num_workers=4  # Procesamiento paralelo
-        )
-        print(f"✅ Faster-Whisper cargado (~4-5x más rápido que Whisper normal)")
+    def __init__(self):
+        api_key = os.getenv("GROQ_API_KEY")
+        if not api_key:
+            raise ValueError(
+                "GROQ_API_KEY not found. "
+                "Please add your API key to the .env file. "
+                "Get one free at: https://console.groq.com"
+            )
+        self.client = Groq(api_key=api_key)
+        print("✅ Groq Whisper API initialized")
     
     def transcribe(self, audio_path: str) -> str:
-        """
-        Transcribe un archivo de audio a texto
-        """
-        print(f"🎤 Transcribiendo: {audio_path}")
+        print(f"🎤 Transcribing with Groq Whisper: {audio_path}")
         
-        # Transcribir con faster-whisper
-        segments, info = self.model.transcribe(
-            audio_path,
-            language="es",  # Español
-            beam_size=5,
-            vad_filter=True,  # Filtro de detección de voz (más rápido)
-            vad_parameters=dict(min_silence_duration_ms=500)
-        )
+        try:
+            file_size_mb = os.path.getsize(audio_path) / (1024 * 1024)
+            print(f"📊 File size: {file_size_mb:.2f} MB")
+            
+            if file_size_mb < 20:
+                return self._transcribe_file(audio_path)
+            
+            print(f"⚠️  Large file ({file_size_mb:.2f}MB), splitting into chunks...")
+            return self._transcribe_large_file(audio_path)
+            
+        except Exception as e:
+            print(f"❌ Transcription error: {e}")
+            return ""
+    
+    def _transcribe_file(self, audio_path: str) -> str:
+        with open(audio_path, "rb") as audio_file:
+            transcription = self.client.audio.transcriptions.create(
+                file=audio_file,
+                model="whisper-large-v3-turbo",
+                language="es",
+                response_format="text",
+                temperature=0.0
+            )
         
-        # Detectar idioma
-        print(f"📝 Idioma detectado: {info.language} ({info.language_probability:.2%} confianza)")
-        print(f"⏱️  Duración del audio: {info.duration:.1f} segundos")
+        transcript = transcription.strip()
+        print(f"✅ Transcription completed: {len(transcript)} characters")
         
-        # Unir todos los segmentos
-        transcript = " ".join([segment.text for segment in segments])
+        if len(transcript) > 0:
+            print(f"📄 First 200 characters: {transcript[:200]}...")
         
-        print(f"✅ Transcripción completada: {len(transcript)} caracteres")
-        return transcript.strip()
+        return transcript
+    
+    def _transcribe_large_file(self, audio_path: str) -> str:
+        from pydub import AudioSegment
+        import math
+        
+        audio = AudioSegment.from_file(audio_path)
+        duration_ms = len(audio)
+        duration_min = duration_ms / (1000 * 60)
+        
+        print(f"⏱️  Audio duration: {duration_min:.1f} minutes")
+        
+        chunk_length_ms = 10 * 60 * 1000
+        num_chunks = math.ceil(duration_ms / chunk_length_ms)
+        
+        print(f"🔪 Splitting into {num_chunks} chunks of ~10 minutes...")
+        
+        transcripts = []
+        
+        for i in range(num_chunks):
+            start_ms = i * chunk_length_ms
+            end_ms = min((i + 1) * chunk_length_ms, duration_ms)
+            
+            print(f"📝 Processing chunk {i+1}/{num_chunks} ({start_ms//1000//60}:{start_ms//1000%60:02d} - {end_ms//1000//60}:{end_ms//1000%60:02d})...")
+            
+            chunk = audio[start_ms:end_ms]
+            chunk_path = f"temp_chunk_{i}.wav"
+            chunk.export(chunk_path, format="wav")
+            
+            try:
+                chunk_transcript = self._transcribe_file(chunk_path)
+                transcripts.append(chunk_transcript)
+            except Exception as e:
+                print(f"⚠️  Error in chunk {i+1}: {e}")
+                transcripts.append("")
+            finally:
+                if os.path.exists(chunk_path):
+                    os.remove(chunk_path)
+        
+        full_transcript = " ".join(transcripts)
+        print(f"✅ Complete transcription: {len(full_transcript)} characters ({num_chunks} chunks)")
+        
+        return full_transcript

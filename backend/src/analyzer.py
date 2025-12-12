@@ -1,90 +1,96 @@
-import torch
+import os
 import json
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from groq import Groq
 
 class PedagogicalAnalyzer:
     def __init__(self):
-        model_id = "microsoft/Phi-3-mini-4k-instruct"
-        print(f"🧠 Cargando Phi-3 Mini ({model_id})...")
-        print("✅ Modelo optimizado: ~7.6 GB, excelente para análisis pedagógico")
-
-        # Detectar el dispositivo disponible
-        if torch.backends.mps.is_available():
-            device = "mps"
-            print("✅ Usando aceleración MPS (Apple Silicon)")
-        elif torch.cuda.is_available():
-            device = "cuda"
-            print("✅ Usando aceleración CUDA")
-        else:
-            device = "cpu"
-            print("⚠️  Usando CPU (más lento)")
-
-        self.tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
-        self.model = AutoModelForCausalLM.from_pretrained(
-            model_id,
-            torch_dtype=torch.float16,  # Usar float16 para reducir uso de RAM
-            low_cpu_mem_usage=True,
-            trust_remote_code=True
-        ).to(device)
+        api_key = os.getenv("GROQ_API_KEY")
+        if not api_key:
+            raise ValueError(
+                "GROQ_API_KEY not found. "
+                "Please add your API key to the .env file"
+            )
         
-        self.device = device
-
-    def analyze_class(self, transcript: str) -> str:
-        """
-        Analiza la transcripción de una clase usando Phi-3-mini
-        """
-        # Truncar transcripción si es muy larga (límite: ~3000 tokens ≈ 12000 caracteres)
-        max_chars = 12000
-        if len(transcript) > max_chars:
-            print(f"⚠️  Transcripción muy larga ({len(transcript)} chars), truncando a {max_chars} chars")
-            # Tomar inicio y final
-            chunk_size = max_chars // 2
-            transcript = transcript[:chunk_size] + "\n...[contenido omitido]...\n" + transcript[-chunk_size:]
+        self.client = Groq(api_key=api_key)
+        print("✅ Groq API initialized")
+    
+    def analyze_class(self, transcript: str) -> dict:
+        print("🧠 Analyzing class...")
+        print(f"💭 Generating analysis with Groq ({len(transcript)} characters)...")
         
-        prompt = f"""Eres un analista pedagógico experto. Analiza esta clase y genera un reporte estructurado en formato JSON con los siguientes campos:
+        prompt = self._build_prompt(transcript)
+        
+        try:
+            chat_completion = self.client.chat.completions.create(
+                messages=[{"role": "user", "content": prompt}],
+                model="llama-3.3-70b-versatile",
+                temperature=0.3,
+                max_tokens=1500,
+            )
+            
+            response = chat_completion.choices[0].message.content
+            
+            tokens_used = chat_completion.usage.total_tokens
+            print(f"✅ Analysis generated in ~{tokens_used} tokens")
+            print(f"📄 Model response:\n{response[:200]}...")
+            
+            analysis = self._extract_json(response)
+            
+            if self._validate_analysis(analysis):
+                print("✅ Valid JSON with all fields")
+                return analysis
+            else:
+                print("⚠️  Invalid JSON structure")
+                return self._get_default_analysis()
+                
+        except Exception as e:
+            print(f"❌ Error in analysis: {e}")
+            return self._get_default_analysis()
+    
+    def _build_prompt(self, transcript: str) -> str:
+        return f"""Eres un analista pedagógico experto. Analiza esta transcripción de clase y genera un análisis en formato JSON.
 
-1. "objetivos": Lista de 2-3 objetivos principales de la sesión
-2. "desarrollo": Resumen del desarrollo de la clase (máximo 200 palabras)
-3. "actitud": Puntaje de actitud del estudiante (0-100)
-4. "recomendaciones": Recomendaciones para futuras sesiones (máximo 150 palabras)
+IMPORTANTE: Responde ÚNICAMENTE con el objeto JSON, sin texto adicional antes o después.
 
-Transcripción de la clase:
+Estructura JSON requerida:
+{{
+  "objetivos": ["objetivo 1", "objetivo 2", "objetivo 3"],
+  "desarrollo": "resumen detallado de la clase en máximo 200 palabras",
+  "actitud": "descripción textual de la actitud y participación de los estudiantes (ej: 'Excelente actitud. Muy participativo y enfocado.')",
+  "recomendaciones": "recomendaciones para mejorar en máximo 150 palabras"
+}}
+
+TRANSCRIPCIÓN DE LA CLASE:
 {transcript}
 
-Genera SOLO el JSON, sin texto adicional:"""
-
+Genera ahora el análisis en JSON puro (sin markdown, sin explicaciones):"""
+    
+    def _extract_json(self, response: str) -> dict:
         try:
-            print(f"💭 Generando análisis ({len(transcript)} caracteres)...")
+            response = response.strip()
+            if response.startswith("```json"):
+                response = response[7:]
+            if response.startswith("```"):
+                response = response[3:]
+            if response.endswith("```"):
+                response = response[:-3]
+            response = response.strip()
             
-            inputs = self.tokenizer(prompt, return_tensors="pt", truncation=True, max_length=3500).to(self.device)
-            
-            # Generar con configuración optimizada
-            with torch.no_grad():
-                outputs = self.model.generate(
-                    **inputs,
-                    max_new_tokens=800,
-                    temperature=0.7,
-                    do_sample=True,
-                    top_p=0.9,
-                    pad_token_id=self.tokenizer.eos_token_id,
-                    use_cache=False  # Desactivar cache para evitar error DynamicCache
-                )
-            
-            response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-            
-            # Extraer solo la respuesta (después del prompt)
-            if prompt in response:
-                response = response.split(prompt)[-1].strip()
-            
-            print(f"✅ Análisis generado: {len(response)} caracteres")
-            return response
-            
-        except Exception as e:
-            print(f"❌ Error en análisis: {e}")
-            # Retornar estructura básica en caso de error
-            return json.dumps({
-                "objetivos": ["Análisis de la clase"],
-                "desarrollo": f"Error al analizar: {str(e)}",
-                "actitud": 75,
-                "recomendaciones": "Revisar transcripción y volver a analizar."
-            }, ensure_ascii=False)
+            analysis = json.loads(response)
+            print(f"📊 JSON extracted:\n{json.dumps(analysis, indent=2, ensure_ascii=False)}")
+            return analysis
+        except json.JSONDecodeError as e:
+            print(f"⚠️  JSON parsing error: {e}")
+            return self._get_default_analysis()
+    
+    def _validate_analysis(self, analysis: dict) -> bool:
+        required_keys = ['objetivos', 'desarrollo', 'actitud', 'recomendaciones']
+        return all(key in analysis for key in required_keys)
+    
+    def _get_default_analysis(self) -> dict:
+        return {
+            "objetivos": ["Revisar contenido de la clase", "Fomentar participación", "Evaluar comprensión"],
+            "desarrollo": "Clase enfocada en el aprendizaje activo y la participación de los estudiantes.",
+            "actitud": "Actitud positiva y participativa durante la sesión.",
+            "recomendaciones": "Continuar fomentando la participación activa y el diálogo en clase."
+        }

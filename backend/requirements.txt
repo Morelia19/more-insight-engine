@@ -1,10 +1,9 @@
 fastapi
 uvicorn[standard]
 python-multipart
-faster-whisper
-torch
-transformers
-accelerate
-Pillow
-python-dateutil
 ffmpeg-python
+pillow
+groq
+python-dotenv
+pydub
+python-dateutil

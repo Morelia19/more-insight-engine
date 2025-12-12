@@ -4,10 +4,14 @@ from fastapi.responses import FileResponse
 from src.transcriber import AudioTranscriber
 from src.analyzer import PedagogicalAnalyzer
 from src.report_generator import ReportGenerator
+from dotenv import load_dotenv
 import shutil
 import os
 import json
 import ffmpeg
+
+# Cargar variables de entorno desde .env
+load_dotenv()
 
 app = FastAPI()
 
@@ -63,12 +67,32 @@ async def analyze_class(
         print("🧠 Analizando clase...")
         raw_analysis = analyzer.analyze_class(transcript)
         
-        # Intentar parsear JSON del análisis
+        # Intentar parsear JSON del análisis con mejor extracción
         try:
+            # Buscar el JSON en la respuesta
             start = raw_analysis.find('{')
             end = raw_analysis.rfind('}') + 1
-            json_analysis = json.loads(raw_analysis[start:end])
-        except:
+            
+            if start >= 0 and end > start:
+                json_str = raw_analysis[start:end]
+                print(f"📊 JSON extraído:\n{json_str}")
+                json_analysis = json.loads(json_str)
+                
+                # Validar que tiene los campos esperados
+                required_fields = ["objetivos", "desarrollo", "actitud", "recomendaciones"]
+                for field in required_fields:
+                    if field not in json_analysis:
+                        print(f"⚠️  Campo faltante: {field}")
+                        raise ValueError(f"Campo {field} no encontrado en análisis")
+                
+                print("✅ JSON válido con todos los campos")
+            else:
+                raise ValueError("No se encontró JSON en la respuesta")
+                
+        except Exception as parse_error:
+            print(f"⚠️  Error parseando JSON: {parse_error}")
+            print(f"📄 Respuesta completa del modelo:\n{raw_analysis}")
+            
             # Si falla, crear estructura básica
             json_analysis = {
                 "objetivos": ["Análisis de la clase"],
@@ -97,11 +121,16 @@ async def analyze_class(
 async def generate_report(
     analysis: str = Form(...),
     session_photo: UploadFile = File(None),
+    logo: UploadFile = File(None),
     student_name: str = Form(...),
-    teacher_name: str = Form(...)
+    teacher_name: str = Form(...),
+    session_number: int = Form(1),
+    total_sessions: int = Form(8),
+    session_date: str = Form(None)
 ):
     """Paso 2: Genera el reporte visual a partir del análisis editado"""
     temp_session = None
+    temp_logo = None
     
     try:
         # 1. Parsear análisis
@@ -113,13 +142,23 @@ async def generate_report(
             with open(temp_session, "wb") as buffer:
                 shutil.copyfileobj(session_photo.file, buffer)
         
-        # 3. Generar reporte visual
+        # 3. Guardar logo si existe
+        if logo:
+            temp_logo = f"temp_logo_{logo.filename}"
+            with open(temp_logo, "wb") as buffer:
+                shutil.copyfileobj(logo.file, buffer)
+        
+        # 4. Generar reporte visual
         print("🎨 Generando reporte visual...")
         report_path = report_gen.generate_report(
             analysis=json_analysis,
             session_photo_path=temp_session,
+            logo_path=temp_logo,
             student_name=student_name,
-            teacher_name=teacher_name
+            teacher_name=teacher_name,
+            session_number=session_number,
+            total_sessions=total_sessions,
+            session_date=session_date
         )
         
         # Obtener nombre del archivo generado
@@ -132,12 +171,13 @@ async def generate_report(
 
     except Exception as e:
         print(f"❌ Error: {e}")
-        return {"status": "error", "message": str(e)}
+        return {"status": "success", "report_image": f"/{report_path}"}
     
     finally:
         # Limpiar archivos temporales
-        if temp_session and os.path.exists(temp_session):
-            os.remove(temp_session)
+        for temp_file in [temp_session, temp_logo]:
+            if temp_file and os.path.exists(temp_file):
+                os.remove(temp_file)
 
 @app.get("/reports/{filename}")
 async def get_report(filename: str):

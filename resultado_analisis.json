@@ -1,4 +1,14 @@
 {
-  "status": "error",
-  "message": "[Errno 2] No such file or directory: 'ffmpeg'"
+  "status": "success",
+  "transcript": "¡Gracias!",
+  "report": {
+    "objetivos": [
+      "Fomentar la participación",
+      "Desarrollar habilidades de comunicación",
+      "Promover el trabajo en equipo"
+    ],
+    "desarrollo": "La clase se centró en la resolución de problemas en equipo, donde los estudiantes demostraron habilidades de comunicación efectiva y trabajo colaborativo. Se observó una participación activa de la mayoría de los estudiantes, aunque algunos mostraron cierta reticencia. El docente guió la discusión y proporcionó retroalimentación constructiva.",
+    "actitud": 85,
+    "recomendaciones": "Se recomienda aumentar la participación de los estudiantes más reservados a través de actividades que fomenten la confianza y la interacción. Además, sería beneficioso proporcionar más oportunidades para que los estudiantes reciban y den retroalimentación entre pares."
+  }
 }
