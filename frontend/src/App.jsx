@@ -65,12 +65,13 @@ function App() {
       })
 
       setAnalysisData(response.data)
-      const report = response.data.report
+      const desarrollo = response.data.report.desarrollo
 
-      setObjetivos(report.objetivos || [])
-      setDesarrollo(report.desarrollo || '')
-      setActitud(report.actitud || '')
-      setRecomendaciones(report.recomendaciones || '')
+      setObjetivos(Array.isArray(desarrollo.objetivos) ? desarrollo.objetivos : [])
+      setDesarrollo(typeof desarrollo.desarrollo === 'string' ? desarrollo.desarrollo : JSON.stringify(desarrollo.desarrollo))
+      setActitud(typeof desarrollo.actitud === 'string' ? desarrollo.actitud : String(desarrollo.actitud))
+      setRecomendaciones(typeof desarrollo.recomendaciones === 'string' ? desarrollo.recomendaciones : '')
+
 
     } catch (err) {
       setError(err.response?.data?.message || 'Error al procesar el archivo')
@@ -232,7 +233,7 @@ function App() {
             <div className="mt-6 space-y-4">
               <StatusMessage
                 type="info"
-                title="✅ Análisis Completado"
+                title=" Análisis Completado"
                 message="Revisa el contenido y edítalo si es necesario. Luego genera el reporte visual."
               />
 
@@ -263,7 +264,7 @@ function App() {
                     Generando Reporte Visual...
                   </>
                 ) : (
-                  '🎨 Generar Reporte Visual'
+                  'Generar Reporte Visual'
                 )}
               </button>
             </div>
