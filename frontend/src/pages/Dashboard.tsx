@@ -1,35 +1,54 @@
-import { useState } from 'react'
+import { useState, ChangeEvent, FormEvent } from 'react'
 import { Loader2 } from 'lucide-react'
 import axios from 'axios'
-import FormHeader from './components/FormHeader'
-import FileUpload from './components/FileUpload'
-import StatusMessage from './components/StatusMessage'
-import AnalysisForm from './components/AnalysisForm'
-import './index.css'
+import FormHeader from '../components/FormHeader'
+import FileUpload from '../components/FileUpload'
+import StatusMessage from '../components/StatusMessage'
+import AnalysisForm from '../components/AnalysisForm'
+import '../index.css'
 
-function App() {
-  const [videoFile, setVideoFile] = useState(null)
-  const [sessionPhoto, setSessionPhoto] = useState(null)
-  const [logo, setLogo] = useState(null)
-  const [teacherName, setTeacherName] = useState('Profesor')
-  const [studentName, setStudentName] = useState('Estudiante')
-  const [sessionNumber, setSessionNumber] = useState(1)
-  const [totalSessions, setTotalSessions] = useState(8)
-  const [sessionDate, setSessionDate] = useState(new Date().toISOString().split('T')[0])
-  const [loading, setLoading] = useState(false)
-  const [analysisData, setAnalysisData] = useState(null)
+interface AnalysisData {
+  transcript: string;
+  report: {
+    desarrollo: {
+      objetivos: string[] | null;
+      desarrollo: string | { [key: string]: unknown };
+      actitud: string | number;
+      recomendaciones: string;
+    };
+  };
+}
 
-  const [objetivos, setObjetivos] = useState([])
-  const [desarrollo, setDesarrollo] = useState('')
-  const [actitud, setActitud] = useState('')
-  const [recomendaciones, setRecomendaciones] = useState('')
+interface ResultData {
+  status: string;
+  report_image: string;
+}
 
-  const [result, setResult] = useState(null)
-  const [error, setError] = useState(null)
-  const [generatingReport, setGeneratingReport] = useState(false)
+function Dashboard() {
+  const [videoFile, setVideoFile] = useState<File | null>(null)
+  const [sessionPhoto, setSessionPhoto] = useState<File | null>(null)
+  const [logo, setLogo] = useState<File | null>(null)
+  const [teacherName, setTeacherName] = useState<string>('Profesor')
+  const [studentName, setStudentName] = useState<string>('Estudiante')
+  const [sessionNumber, setSessionNumber] = useState<number>(1)
+  const [totalSessions, setTotalSessions] = useState<number>(8)
+  const [sessionDate, setSessionDate] = useState<string>(new Date().toISOString().split('T')[0])
+  const [loading, setLoading] = useState<boolean>(false)
+  const [analysisData, setAnalysisData] = useState<AnalysisData | null>(null)
 
-  const handleVideoChange = (e) => {
-    setVideoFile(e.target.files[0])
+  const [objetivos, setObjetivos] = useState<string[]>([])
+  const [desarrollo, setDesarrollo] = useState<string>('')
+  const [actitud, setActitud] = useState<string>('')
+  const [recomendaciones, setRecomendaciones] = useState<string>('')
+
+  const [result, setResult] = useState<ResultData | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [generatingReport, setGeneratingReport] = useState<boolean>(false)
+
+  const handleVideoChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setVideoFile(e.target.files[0])
+    }
     setError(null)
     setAnalysisData(null)
     setObjetivos([])
@@ -39,7 +58,7 @@ function App() {
     setResult(null)
   }
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     if (!videoFile) {
       setError('Por favor selecciona un archivo de video')
@@ -55,25 +74,25 @@ function App() {
     formData.append('video', videoFile)
     formData.append('teacher_name', teacherName)
     formData.append('student_name', studentName)
-    formData.append('session_number', sessionNumber)
-    formData.append('total_sessions', totalSessions)
+    formData.append('session_number', sessionNumber.toString())
+    formData.append('total_sessions', totalSessions.toString())
     formData.append('session_date', sessionDate)
 
     try {
-      const response = await axios.post('http://localhost:8000/analyze_class', formData, {
+      const response = await axios.post<AnalysisData>('http://localhost:8000/analyze_class', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       })
 
       setAnalysisData(response.data)
-      const desarrollo = response.data.report.desarrollo
+      const desarrolloData = response.data.report.desarrollo
 
-      setObjetivos(Array.isArray(desarrollo.objetivos) ? desarrollo.objetivos : [])
-      setDesarrollo(typeof desarrollo.desarrollo === 'string' ? desarrollo.desarrollo : JSON.stringify(desarrollo.desarrollo))
-      setActitud(typeof desarrollo.actitud === 'string' ? desarrollo.actitud : String(desarrollo.actitud))
-      setRecomendaciones(typeof desarrollo.recomendaciones === 'string' ? desarrollo.recomendaciones : '')
+      setObjetivos(Array.isArray(desarrolloData.objetivos) ? desarrolloData.objetivos : [])
+      setDesarrollo(typeof desarrolloData.desarrollo === 'string' ? desarrolloData.desarrollo : JSON.stringify(desarrolloData.desarrollo))
+      setActitud(typeof desarrolloData.actitud === 'string' ? desarrolloData.actitud : String(desarrolloData.actitud))
+      setRecomendaciones(typeof desarrolloData.recomendaciones === 'string' ? desarrolloData.recomendaciones : '')
 
 
-    } catch (err) {
+    } catch (err: any) {
       setError(err.response?.data?.message || 'Error al procesar el archivo')
     } finally {
       setLoading(false)
@@ -94,16 +113,16 @@ function App() {
 
       formData.append('teacher_name', teacherName)
       formData.append('student_name', studentName)
-      formData.append('session_number', sessionNumber)
-      formData.append('total_sessions', totalSessions)
+      formData.append('session_number', sessionNumber.toString())
+      formData.append('total_sessions', totalSessions.toString())
       formData.append('session_date', sessionDate)
 
-      const response = await axios.post('http://localhost:8000/generate_report', formData, {
+      const response = await axios.post<ResultData>('http://localhost:8000/generate_report', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       })
 
       setResult(response.data)
-    } catch (err) {
+    } catch (err: any) {
       setError(err.response?.data?.message || 'Error al generar el reporte')
     } finally {
       setGeneratingReport(false)
@@ -196,7 +215,9 @@ function App() {
               label="Logo (Opcional)"
               accept="image/*"
               file={logo}
-              onChange={(e) => setLogo(e.target.files[0])}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                if (e.target.files) setLogo(e.target.files[0])
+              }}
               type="image"
             />
 
@@ -205,7 +226,9 @@ function App() {
               label="Foto de la Sesión (Opcional)"
               accept="image/*"
               file={sessionPhoto}
-              onChange={(e) => setSessionPhoto(e.target.files[0])}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                if (e.target.files) setSessionPhoto(e.target.files[0])
+              }}
               type="image"
             />
 
@@ -303,4 +326,4 @@ function App() {
   )
 }
 
-export default App
+export default Dashboard

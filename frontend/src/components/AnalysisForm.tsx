@@ -1,15 +1,26 @@
-export default function AnalysisForm({ objetivos, desarrollo, actitud, recomendaciones, onObjetivosChange, onDesarrolloChange, onActitudChange, onRecomendacionesChange }) {
+interface AnalysisFormProps {
+    objetivos: string[];
+    desarrollo: string;
+    actitud: string;
+    recomendaciones: string;
+    onObjetivosChange: (value: string[]) => void;
+    onDesarrolloChange: (value: string) => void;
+    onActitudChange: (value: string) => void;
+    onRecomendacionesChange: (value: string) => void;
+}
+
+export default function AnalysisForm({ objetivos, desarrollo, actitud, recomendaciones, onObjetivosChange, onDesarrolloChange, onActitudChange, onRecomendacionesChange }: AnalysisFormProps) {
     const addObjetivo = () => {
         onObjetivosChange([...objetivos, ''])
     }
 
-    const updateObjetivo = (index, value) => {
+    const updateObjetivo = (index: number, value: string) => {
         const newObjetivos = [...objetivos]
         newObjetivos[index] = value
         onObjetivosChange(newObjetivos)
     }
 
-    const removeObjetivo = (index) => {
+    const removeObjetivo = (index: number) => {
         onObjetivosChange(objetivos.filter((_, i) => i !== index))
     }
 

@@ -1,7 +1,23 @@
-import { XCircle, CheckCircle, Loader2 } from 'lucide-react'
+import { XCircle, CheckCircle, LucideProps } from 'lucide-react'
+import { ForwardRefExoticComponent, RefAttributes } from 'react'
 
-export default function StatusMessage({ type, title, message }) {
-    const styles = {
+interface StatusMessageProps {
+    type: 'error' | 'success' | 'info';
+    title: string;
+    message: string;
+}
+
+interface StyleConfig {
+    bg: string;
+    border: string;
+    icon: ForwardRefExoticComponent<Omit<LucideProps, "ref"> & RefAttributes<SVGSVGElement>>;
+    iconColor: string;
+    titleColor: string;
+    messageColor: string;
+}
+
+export default function StatusMessage({ type, title, message }: StatusMessageProps) {
+    const styles: Record<string, StyleConfig> = {
         error: {
             bg: 'bg-red-50',
             border: 'border-red-200',

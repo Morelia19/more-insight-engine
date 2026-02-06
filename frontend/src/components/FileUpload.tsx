@@ -1,6 +1,17 @@
 import { Upload } from 'lucide-react'
+import { ChangeEvent } from 'react'
 
-export default function FileUpload({ id, label, accept, file, onChange, showPreview = true, type = 'image' }) {
+interface FileUploadProps {
+    id: string;
+    label: string;
+    accept?: string;
+    file: File | null;
+    onChange: (e: ChangeEvent<HTMLInputElement>) => void;
+    showPreview?: boolean;
+    type?: 'image' | 'video' | 'session-photo' | 'logo';
+}
+
+export default function FileUpload({ id, label, accept, file, onChange, showPreview = true, type = 'image' }: FileUploadProps) {
     return (
         <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
